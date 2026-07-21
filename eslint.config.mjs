@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated shadcn/ui internals with known lint warnings:
+    "components/ui/carousel.tsx",
   ]),
 ]);
 
