@@ -235,16 +235,18 @@ export function Chat() {
               <QueueList>
                 {queue.map((text, index) => (
                   <QueueItem key={`${index}-${text}`}>
-                    <QueueItemIndicator />
-                    <QueueItemContent>{text}</QueueItemContent>
-                    <QueueItemActions>
-                      <QueueItemAction
-                        aria-label="Remove from queue"
-                        onClick={() => removeQueued(index)}
-                      >
-                        <Trash2Icon className="size-4" />
-                      </QueueItemAction>
-                    </QueueItemActions>
+                    <div className="flex items-center gap-2">
+                      <QueueItemIndicator />
+                      <QueueItemContent>{text}</QueueItemContent>
+                      <QueueItemActions>
+                        <QueueItemAction
+                          aria-label="Remove from queue"
+                          onClick={() => removeQueued(index)}
+                        >
+                          <Trash2Icon className="size-4" />
+                        </QueueItemAction>
+                      </QueueItemActions>
+                    </div>
                   </QueueItem>
                 ))}
               </QueueList>
