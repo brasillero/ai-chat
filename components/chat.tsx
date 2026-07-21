@@ -1,10 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { MessageSquareIcon } from "lucide-react";
+import { DefaultChatTransport, UIMessage } from "ai";
+import { BookmarkPlusIcon, MessageSquareIcon, Trash2Icon } from "lucide-react";
 
+import {
+  ChainOfThought,
+  ChainOfThoughtContent,
+  ChainOfThoughtHeader,
+  ChainOfThoughtStep,
+} from "@/components/ai-elements/chain-of-thought";
+import {
+  Checkpoint,
+  CheckpointIcon,
+  CheckpointTrigger,
+} from "@/components/ai-elements/checkpoint";
 import {
   Conversation,
   ConversationContent,
@@ -13,6 +24,8 @@ import {
 } from "@/components/ai-elements/conversation";
 import {
   Message,
+  MessageAction,
+  MessageActions,
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
@@ -22,19 +35,80 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
+import {
+  Queue,
+  QueueItem,
+  QueueItemAction,
+  QueueItemActions,
+  QueueItemContent,
+  QueueItemIndicator,
+  QueueList,
+  QueueSection,
+  QueueSectionContent,
+  QueueSectionLabel,
+  QueueSectionTrigger,
+} from "@/components/ai-elements/queue";
+import {
+  Source,
+  Sources,
+  SourcesContent,
+  SourcesTrigger,
+} from "@/components/ai-elements/sources";
 import { Button } from "@/components/ui/button";
+
+type SourceUrlPart = Extract<
+  UIMessage["parts"][number],
+  { type: "source-url" }
+>;
 
 export function Chat() {
   const [input, setInput] = useState("");
-  const { messages, sendMessage, status, error, stop, regenerate } = useChat({
+  // Indexes into `messages` where the user placed a checkpoint.
+  const [checkpoints, setCheckpoints] = useState<number[]>([]);
+  // Messages typed while the AI is busy; flushed FIFO when it becomes ready.
+  const [queue, setQueue] = useState<string[]>([]);
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    error,
+    stop,
+    regenerate,
+  } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   });
 
   const handleSubmit = (message: PromptInputMessage) => {
     const text = message.text.trim();
-    if (!text || status !== "ready") return;
-    sendMessage({ text });
+    if (!text) return;
+    if (status === "ready") {
+      sendMessage({ text });
+    } else {
+      setQueue((prev) => [...prev, text]);
+    }
     setInput("");
+  };
+
+  useEffect(() => {
+    if (status !== "ready" || queue.length === 0) return;
+    const [next, ...rest] = queue;
+    sendMessage({ text: next });
+    // Dequeue asynchronously to avoid a synchronous cascading render.
+    queueMicrotask(() => setQueue(rest));
+  }, [status, queue, sendMessage]);
+
+  const createCheckpoint = (index: number) => {
+    setCheckpoints((prev) => (prev.includes(index) ? prev : [...prev, index]));
+  };
+
+  const restoreToCheckpoint = (index: number) => {
+    setMessages(messages.slice(0, index + 1));
+    setCheckpoints((prev) => prev.filter((cp) => cp <= index));
+  };
+
+  const removeQueued = (index: number) => {
+    setQueue((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -48,19 +122,90 @@ export function Chat() {
               description="Type a message below to chat with the AI."
             />
           ) : (
-            messages.map((message) => (
-              <Message from={message.role} key={message.id}>
-                <MessageContent>
-                  {message.parts.map((part, index) =>
-                    part.type === "text" ? (
-                      <MessageResponse key={`${message.id}-${index}`}>
-                        {part.text}
-                      </MessageResponse>
-                    ) : null,
+            messages.map((message, index) => {
+              const isUser = message.role === "user";
+              const sourceParts = message.parts.filter(
+                (part): part is SourceUrlPart => part.type === "source-url",
+              );
+              return (
+                <Fragment key={message.id}>
+                  <Message from={message.role}>
+                    <MessageContent>
+                      {!isUser && sourceParts.length > 0 && (
+                        <Sources>
+                          <SourcesTrigger count={sourceParts.length} />
+                          <SourcesContent>
+                            {sourceParts.map((part, partIndex) => (
+                              <Source
+                                key={`${message.id}-source-${partIndex}`}
+                                href={part.url}
+                                title={part.title ?? part.url}
+                              />
+                            ))}
+                          </SourcesContent>
+                        </Sources>
+                      )}
+                      {message.parts.map((part, partIndex) => {
+                        switch (part.type) {
+                          case "text":
+                            return (
+                              <MessageResponse
+                                key={`${message.id}-${partIndex}`}
+                              >
+                                {part.text}
+                              </MessageResponse>
+                            );
+                          case "reasoning":
+                            return (
+                              <ChainOfThought
+                                key={`${message.id}-${partIndex}`}
+                              >
+                                <ChainOfThoughtHeader>
+                                  Chain of thought
+                                </ChainOfThoughtHeader>
+                                <ChainOfThoughtContent>
+                                  <ChainOfThoughtStep
+                                    label="Reasoning"
+                                    description={part.text}
+                                    status={
+                                      status === "streaming"
+                                        ? "active"
+                                        : "complete"
+                                    }
+                                  />
+                                </ChainOfThoughtContent>
+                              </ChainOfThought>
+                            );
+                          default:
+                            return null;
+                        }
+                      })}
+                    </MessageContent>
+                    {!isUser && (
+                      <MessageActions>
+                        <MessageAction
+                          tooltip="Create checkpoint"
+                          label="Create checkpoint"
+                          onClick={() => createCheckpoint(index)}
+                        >
+                          <BookmarkPlusIcon className="size-4" />
+                        </MessageAction>
+                      </MessageActions>
+                    )}
+                  </Message>
+                  {checkpoints.includes(index) && (
+                    <Checkpoint>
+                      <CheckpointIcon />
+                      <CheckpointTrigger
+                        onClick={() => restoreToCheckpoint(index)}
+                      >
+                        Restore checkpoint
+                      </CheckpointTrigger>
+                    </Checkpoint>
                   )}
-                </MessageContent>
-              </Message>
-            ))
+                </Fragment>
+              );
+            })
           )}
         </ConversationContent>
         <ConversationScrollButton />
@@ -80,12 +225,39 @@ export function Chat() {
         </div>
       )}
 
+      {queue.length > 0 && (
+        <Queue className="mb-2">
+          <QueueSection defaultOpen>
+            <QueueSectionTrigger>
+              <QueueSectionLabel count={queue.length} label="Queued" />
+            </QueueSectionTrigger>
+            <QueueSectionContent>
+              <QueueList>
+                {queue.map((text, index) => (
+                  <QueueItem key={`${index}-${text}`}>
+                    <QueueItemIndicator />
+                    <QueueItemContent>{text}</QueueItemContent>
+                    <QueueItemActions>
+                      <QueueItemAction
+                        aria-label="Remove from queue"
+                        onClick={() => removeQueued(index)}
+                      >
+                        <Trash2Icon className="size-4" />
+                      </QueueItemAction>
+                    </QueueItemActions>
+                  </QueueItem>
+                ))}
+              </QueueList>
+            </QueueSectionContent>
+          </QueueSection>
+        </Queue>
+      )}
+
       <PromptInput onSubmit={handleSubmit} className="relative mb-4">
         <PromptInputTextarea
           value={input}
           onChange={(e) => setInput(e.currentTarget.value)}
           placeholder="Type a message..."
-          disabled={status !== "ready"}
           className="pr-12"
         />
         <PromptInputSubmit
