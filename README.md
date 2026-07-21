@@ -36,7 +36,7 @@ A minimal, text-only AI chat app built with Next.js (App Router), the [Vercel AI
 OPENAI_API_KEY=sk-...
 ```
 
-The model defaults to `gpt-5.1`; change `DEFAULT_OPENAI_MODEL` in `app/api/chat/route.ts` to use another.
+The model defaults to `gpt-5.1`; set `OPENAI_MODEL` in `.env.local` to use another (fallback constant: `DEFAULT_OPENAI_MODEL` in `app/api/chat/route.ts`).
 
 ### Option B — Local provider (LM Studio, Ollama, llama.cpp, ...)
 

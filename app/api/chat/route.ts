@@ -11,6 +11,7 @@ import {
 export const maxDuration = 30;
 
 // Default provider: OpenAI (requires OPENAI_API_KEY).
+// Model can be overridden with the OPENAI_MODEL env variable.
 // Override: set LOCAL_LM_PROVIDER to an OpenAI-compatible base URL
 // (llama.cpp, LM Studio, Ollama, ...) plus LOCAL_LM_IDENTIFIER.
 const DEFAULT_OPENAI_MODEL = "gpt-5.1";
@@ -35,7 +36,7 @@ function resolveModel() {
     return local.chat(identifier);
   }
 
-  return openai(DEFAULT_OPENAI_MODEL);
+  return openai(process.env.OPENAI_MODEL ?? DEFAULT_OPENAI_MODEL);
 }
 
 export async function POST(req: Request) {
