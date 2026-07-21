@@ -29,7 +29,10 @@ function resolveModel() {
       baseURL: localBaseURL,
       apiKey: process.env.OPENAI_API_KEY || "not-needed",
     });
-    return local(identifier);
+    // Use the Chat Completions API (/v1/chat/completions): local servers
+    // (LM Studio, llama.cpp, Ollama) only partially implement the Responses
+    // API that provider(id) targets, and reject multi-turn input history.
+    return local.chat(identifier);
   }
 
   return openai(DEFAULT_OPENAI_MODEL);

@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Chat
 
-## Getting Started
+A minimal, text-only AI chat app built with Next.js (App Router), the [Vercel AI SDK](https://ai-sdk.dev), and [AI Elements](https://elements.ai-sdk.dev) components.
 
-First, run the development server:
+- Streaming responses via `streamText` (AI SDK Core) and `useChat` (AI SDK UI)
+- Default provider: OpenAI
+- Optional local provider: any OpenAI-compatible server (LM Studio, Ollama, llama.cpp, ...)
+- No persistence — conversations reset on refresh
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Prerequisites
+
+- Node.js 22+
+- pnpm
+
+## Setup
+
+1. Install dependencies:
+
+   ```bash
+   pnpm install
+   ```
+
+2. Create your env file:
+
+   ```bash
+   cp .env.example .env.local
+   ```
+
+3. Configure a provider in `.env.local` (see below).
+
+## Provider configuration
+
+### Option A — OpenAI (default)
+
+```env
+OPENAI_API_KEY=sk-...
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The model defaults to `gpt-5.1`; change `DEFAULT_OPENAI_MODEL` in `app/api/chat/route.ts` to use another.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Option B — Local provider (LM Studio, Ollama, llama.cpp, ...)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Set **both** variables — when `LOCAL_LM_PROVIDER` is defined it takes precedence over OpenAI:
 
-## Learn More
+```env
+LOCAL_LM_PROVIDER=http://localhost:1234/v1
+LOCAL_LM_IDENTIFIER=mistralai/ministral-3-3b
+```
 
-To learn more about Next.js, take a look at the following resources:
+- `LOCAL_LM_PROVIDER` — the server's OpenAI-compatible base URL (`http://localhost:1234/v1` for LM Studio, `http://localhost:11434/v1` for Ollama).
+- `LOCAL_LM_IDENTIFIER` — the exact model id the server exposes (copy it from LM Studio's server tab, or `ollama list`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Local servers are called through the Chat Completions API (`/v1/chat/completions`), the endpoint they fully support.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Run locally
 
-## Deploy on Vercel
+```bash
+pnpm dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open http://localhost:3000 and start chatting.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Other scripts
+
+```bash
+pnpm build   # production build
+pnpm lint    # eslint
+```
+
+## How it works
+
+- `app/api/chat/route.ts` — POST endpoint: receives the `UIMessage[]` history from the client, picks the provider (OpenAI by default, local when `LOCAL_LM_PROVIDER` is set), calls `streamText`, and streams the response back. Your API key never leaves the server.
+- `components/chat.tsx` — client component: `useChat` manages messages, streaming, status, stop, and retry; AI Elements components (`Conversation`, `Message`, `PromptInput`) render the UI.
